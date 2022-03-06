@@ -1,6 +1,7 @@
 """Main survey file.
 """
 import os
+import textwrap
 
 from flask_login import current_user
 from hemlock import User, Page
@@ -19,10 +20,47 @@ def seed():
     """
     return [
         Page(
-            Label("Hello, world!")
-        ),
-        Page(
-            Label("Goodbye, world!"),
-            back=True
+            Check(
+                "Do you have a favoriable or unfavoriable opinion of Black Lives Matter?",
+                ["Favorable", "Unfavorable"],
+                variable="favorable"
+            ),
+            Textarea(
+                "Why do you have this opinion?",
+                variable="explanation"
+            ),
+            navigate=make_opposing_view_branch
         )
+    ]
+
+
+def make_opposing_view_branch(page):
+    end_page = Page(Label("The End"))
+    df = User.get_all_data()
+    if "favorable" not in df:
+        # no users have responded to the question yet
+        return [end_page]
+
+    df = df[df.favorable != page.questions[0].response].dropna()
+    if len(df) == 0:
+        # all users have agreed with this user's opinion so far
+        return [end_page]
+
+    counterargument = df.sample().explanation.values[0].replace("\n", "")
+    return [
+        Page(
+            Range(
+                f"""
+                Another survey participant who disagrees with you wrote this:
+
+                "{counterargument}"
+
+                On a scale from 1 (completely unconvincing) to 5 (very convincing), how 
+                convincing do you find this argument?
+                """,
+                input_tag={"min": 1, "max": 5},
+                variable="convincing"
+            )
+        ),
+        end_page
     ]
